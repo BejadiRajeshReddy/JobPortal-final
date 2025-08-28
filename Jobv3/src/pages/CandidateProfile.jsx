@@ -1,2576 +1,790 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   User,
   Mail,
   Phone,
   MapPin,
+  Briefcase,
+  GraduationCap,
+  Award,
   Edit3,
   Save,
   X,
-  Upload,
-  Download,
-  Trash2,
-  Eye,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
   Plus,
-  Linkedin,
-  Github,
-  Globe,
-  ExternalLink,
+  Trash2,
   Calendar,
   Building,
-  GraduationCap,
-  Code,
-  FolderOpen,
-  Camera,
+  FileText,
   Star,
-  Award,
-  Briefcase,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/input";
-
-/**
- * CandidateProfile Component
- * 
- * This component stores all profile data in localStorage for persistence.
- * Features:
- * - Profile information management
- * - File uploads (resume & profile picture) stored as base64
- * - Experience, education, skills, and projects management
- * - Data export and import capabilities
- * - localStorage size limit checking (5MB max)
- * 
- * Note: This is a development version using localStorage.
- * In production, consider using a backend database for better security and scalability.
- */
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import jobService from "../services/jobService";
 
 const CandidateProfile = () => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [editingSection, setEditingSection] = useState(null);
-  const [uploadedResume, setUploadedResume] = useState(null);
-  const [profilePicture, setProfilePicture] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [uploadSuccess, setUploadSuccess] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [authError, setAuthError] = useState("");
-
-  // Form states
-  const [personalInfo, setPersonalInfo] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    location: "",
-    jobTitle: "",
-  });
-
-  const [aboutMe, setAboutMe] = useState("");
-  const [socialLinks, setSocialLinks] = useState({
-    linkedin: "",
-    github: "",
-    portfolio: "",
-    website: "",
-  });
-
-  const [experience, setExperience] = useState([]);
-  const [education, setEducation] = useState([]);
-  const [skills, setSkills] = useState([]);
-  const [projects, setProjects] = useState([]);
-
-  // Form states for adding/editing items
-  const [newExperience, setNewExperience] = useState({
-    title: "",
-    company: "",
-    location: "",
-    startDate: "",
-    endDate: "",
-    current: false,
-    description: "",
-  });
-
-  const [newEducation, setNewEducation] = useState({
-    degree: "",
-    institution: "",
-    location: "",
-    startDate: "",
-    endDate: "",
-    current: false,
-    gpa: "",
-    description: "",
-  });
-
-  const [newSkill, setNewSkill] = useState({
-    name: "",
-  });
-
-  const [newProject, setNewProject] = useState({
-    title: "",
-    description: "",
-    technologies: "",
-    startDate: "",
-    endDate: "",
-    current: false,
-    githubUrl: "",
-    liveUrl: "",
-    highlights: "",
-  });
-
-  // Add predefined skills
-  const predefinedSkills = [
-    "JavaScript",
-    "Python",
-    "Java",
-    "C++",
-    "TypeScript",
-    "Ruby",
-    "PHP",
-    "Go",
-    "Rust",
-    "Swift",
-    "React",
-    "Angular",
-    "Vue.js",
-    "Node.js",
-    "Express",
-    "Django",
-    "Flask",
-    "Spring Boot",
-    "Laravel",
-    "Ruby on Rails",
-    "MySQL",
-    "PostgreSQL",
-    "MongoDB",
-    "Redis",
-    "Oracle",
-    "SQL Server",
-    "Git",
-    "Docker",
-    "Kubernetes",
-    "AWS",
-    "Azure",
-    "GCP",
-    "Jira",
-    "Confluence",
-    "Communication",
-    "Leadership",
-    "Problem Solving",
-    "Teamwork",
-    "Time Management",
-    "Adaptability",
-    "Critical Thinking",
-    "Creativity",
-    "Emotional Intelligence",
-  ];
-
-  // Add state for filtered skills
-  const [filteredSkills, setFilteredSkills] = useState([]);
-  const [showSkillDropdown, setShowSkillDropdown] = useState(false);
-
   const navigate = useNavigate();
-  const location = useLocation();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  // Function to check authentication status
-  const checkAuthStatus = () => {
-    const user = localStorage.getItem('currentUser');
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        console.log("Current auth status - User:", userData.name, "Role:", userData.role);
-        return userData;
-      } catch (error) {
-        console.error("Error parsing stored user data:", error);
-        return null;
-      }
-    }
-    return null;
-  };
+  // Profile data state
+  const [profileData, setProfileData] = useState({
+    personalInfo: {
+      name: "",
+      email: "",
+      phone: "",
+      location: "",
+      bio: "",
+      profilePicture: "",
+    },
+    experience: [],
+    education: [],
+    skills: [],
+    certifications: [],
+    preferences: {
+      jobTypes: [],
+      locations: [],
+      salaryRange: { min: "", max: "" },
+      remoteWork: false,
+    },
+  });
 
-  // Listen for authentication state changes
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'currentUser') {
-        console.log("User data changed in localStorage");
-        if (e.newValue) {
-          try {
-            const userData = JSON.parse(e.newValue);
-            setCurrentUser(userData);
-            loadUserProfile();
-          } catch (error) {
-            console.error("Error parsing updated user data:", error);
-          }
-        } else {
-          setCurrentUser(null);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  // Form state for editing
+  const [editData, setEditData] = useState({});
 
   useEffect(() => {
-    console.log("=== CandidateProfile useEffect triggered ===");
-    console.log("Current location:", location.pathname);
-    
-    // Check if user is logged in (you can modify this based on your auth logic)
-    const user = localStorage.getItem('currentUser');
-    console.log("Stored user data:", user); // Debug log
-    
+    // Check if user is logged in and is a candidate
+    const user = localStorage.getItem("currentUser");
     if (!user) {
-      console.log("No user found in localStorage, redirecting to login");
-      setAuthError("Please log in to access your profile");
-      setIsLoading(false);
-      navigate("/login", { state: { returnTo: location.pathname } });
+      navigate("/login");
       return;
     }
 
-    try {
-      const userData = JSON.parse(user);
-      console.log("Parsed user data:", userData); // Debug log
-      console.log("User role:", userData.role); // Debug log
-      
-      // Check for different possible role values that indicate a candidate/job seeker
-      const isCandidate = userData.role === "candidate" || 
-                         userData.role === "jobSeeker" || 
-                         userData.role === "jobseeker" ||
-                         userData.role === "CANDIDATE" ||
-                         userData.role === "JOBSEEKER" ||
-                         userData.role === "JOB_SEEKER";
-      
-      console.log("Is candidate check result:", isCandidate); // Debug log
-      
-      if (!isCandidate) {
-        console.log("User role is not candidate/job seeker:", userData.role); // Debug log
-        setAuthError(`Access denied. User role: ${userData.role}`);
-        setIsLoading(false);
-        // Redirect based on role
-        if (userData.role === "recruiter") {
-          navigate("/dashboard");
-        } else {
-          navigate("/jobs");
-        }
-        return;
-      }
-      
-      console.log("User is a candidate, setting current user and loading profile");
-      setCurrentUser(userData);
-      setAuthError("");
-      loadUserProfile();
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error parsing user data:", error);
-      setAuthError("Error loading user data. Please try logging in again.");
-      setIsLoading(false);
-      navigate("/login", { state: { returnTo: location.pathname } });
+    const userData = JSON.parse(user);
+    if (userData.role !== "candidate") {
+      navigate("/dashboard");
+      return;
     }
-  }, [navigate, location.pathname]);
 
-  const loadUserProfile = () => {
-    // Load profile data from localStorage
-    const profileData = localStorage.getItem(`profile_${currentUser?.id || 'default'}`);
-    
-    if (profileData) {
-      try {
-        const profile = JSON.parse(profileData);
-        
-        setPersonalInfo({
-          fullName: profile.fullName || currentUser?.name || "",
-          email: profile.email || currentUser?.email || "",
-          phone: profile.phone || "",
-          location: profile.location || "",
-          jobTitle: profile.jobTitle || "",
+    setCurrentUser(userData);
+    loadUserProfile(userData.email);
+  }, [navigate]);
+
+  const loadUserProfile = async (email) => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      // Try to get profile from MongoDB
+      const response = await jobService.getUsersData({ email });
+      
+      if (response && response.result && response.result.length > 0) {
+        const userProfile = response.result[0];
+        setProfileData({
+          personalInfo: {
+            name: userProfile.name || "",
+            email: userProfile.email || "",
+            phone: userProfile.phoneNumber || userProfile.phone || "",
+            location: userProfile.location || "",
+            bio: userProfile.bio || "",
+            profilePicture: userProfile.profilePicture || "",
+          },
+          experience: userProfile.experience || [],
+          education: userProfile.education || [],
+          skills: userProfile.skills || [],
+          certifications: userProfile.certifications || [],
+          preferences: userProfile.preferences || {
+            jobTypes: [],
+            locations: [],
+            salaryRange: { min: "", max: "" },
+            remoteWork: false,
+          },
         });
-
-        setAboutMe(profile.aboutMe || "");
-        setSocialLinks(
-          profile.socialLinks || {
-            linkedin: "",
-            github: "",
-            portfolio: "",
-            website: "",
-          }
-        );
-
-        setExperience(profile.experience || []);
-        setEducation(profile.education || []);
-        setSkills(profile.skills || []);
-        setProjects(profile.projects || []);
-        setUploadedResume(profile.resume || null);
-        setProfilePicture(profile.profilePicture || null);
-      } catch (error) {
-        console.error("Error parsing profile data:", error);
-      }
-    } else {
-      // Initialize with user data if no profile exists
-      setPersonalInfo({
-        fullName: currentUser?.name || "",
-        email: currentUser?.email || "",
-        phone: "",
-        location: "",
-        jobTitle: "",
-      });
-    }
-  };
-
-  const saveProfile = () => {
-    if (!currentUser) return;
-
-    const profile = {
-      ...personalInfo,
-      aboutMe,
-      socialLinks,
-      experience,
-      education,
-      skills,
-      projects,
-      resume: uploadedResume,
-      profilePicture,
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      // Check localStorage size limit (usually 5-10MB)
-      const profileString = JSON.stringify(profile);
-      const sizeInMB = new Blob([profileString]).size / (1024 * 1024);
-      
-      if (sizeInMB > 5) {
-        setUploadError("Profile data is too large for localStorage. Please reduce file sizes.");
-        return;
-      }
-
-      // Save to localStorage
-      localStorage.setItem(`profile_${currentUser.id}`, profileString);
-      console.log("Profile saved to localStorage successfully");
-    } catch (err) {
-      console.error("Error saving profile to localStorage:", err);
-      if (err.name === 'QuotaExceededError') {
-        setUploadError("Storage limit exceeded. Please reduce file sizes or remove some data.");
       } else {
-        setUploadError("Failed to save profile. Please try again.");
+        // Initialize with basic user data if no profile exists
+        setProfileData(prev => ({
+          ...prev,
+          personalInfo: {
+            ...prev.personalInfo,
+            name: currentUser?.name || "",
+            email: currentUser?.email || "",
+            phone: currentUser?.phoneNumber || "",
+          }
+        }));
       }
+    } catch (err) {
+      console.error("Error loading profile:", err);
+      setError("Failed to load profile data");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Function to create demo user for testing (remove in production)
-  const createDemoUser = () => {
-    const demoUser = {
-      id: 'demo-user-123',
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      role: 'candidate'
-    };
-    localStorage.setItem('currentUser', JSON.stringify(demoUser));
-    setCurrentUser(demoUser);
-    loadUserProfile();
-  };
-
-  // Function to clear profile data
-  const clearProfileData = () => {
-    if (window.confirm("Are you sure you want to clear all profile data? This action cannot be undone.")) {
-      localStorage.removeItem(`profile_${currentUser.id}`);
-      setPersonalInfo({
-        fullName: currentUser?.name || "",
-        email: currentUser?.email || "",
-        phone: "",
-        location: "",
-        jobTitle: "",
-      });
-      setAboutMe("");
-      setSocialLinks({
-        linkedin: "",
-        github: "",
-        portfolio: "",
-        website: "",
-      });
-      setExperience([]);
-      setEducation([]);
-      setSkills([]);
-      setProjects([]);
-      setUploadedResume(null);
-      setProfilePicture(null);
-      setUploadSuccess("Profile data cleared successfully!");
-      setTimeout(() => setUploadSuccess(""), 3000);
-    }
-  };
-
-  // Function to export profile data
-  const exportProfileData = () => {
-    const profile = {
-      ...personalInfo,
-      aboutMe,
-      socialLinks,
-      experience,
-      education,
-      skills,
-      projects,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const dataStr = JSON.stringify(profile, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `profile_${currentUser.id}_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleEdit = (section) => {
-    setEditingSection(section);
-  };
-
-  const handleSave = () => {
-    setEditingSection(null);
-    saveProfile();
+  const handleEdit = () => {
+    setEditData(JSON.parse(JSON.stringify(profileData)));
+    setIsEditing(true);
+    setError("");
+    setSuccess("");
   };
 
   const handleCancel = () => {
-    setEditingSection(null);
-    if (currentUser) {
-      loadUserProfile(currentUser.id);
-    }
+    setEditData({});
+    setIsEditing(false);
+    setError("");
+    setSuccess("");
   };
 
-  // Profile Picture handlers
-  const handleProfilePictureUpload = (file) => {
-    if (!file) return;
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      setError("");
 
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError("Please upload a valid image file (JPG, PNG, WebP)");
-      return;
-    }
+      // Validate required fields
+      if (!editData.personalInfo?.name || !editData.personalInfo?.email) {
+        setError("Name and email are required");
+        return;
+      }
 
-    const maxSize = 2 * 1024 * 1024; // 2MB
-    if (file.size > maxSize) {
-      setUploadError("Image size must be less than 2MB");
-      return;
-    }
-
-    // Convert file to base64 for localStorage storage
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const pictureData = {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        uploadDate: new Date().toISOString(),
-        data: e.target.result, // base64 data
+      // Prepare data for backend
+      const updateData = {
+        email: currentUser.email,
+        name: editData.personalInfo.name,
+        phoneNumber: editData.personalInfo.phone,
+        location: editData.personalInfo.location,
+        bio: editData.personalInfo.bio,
+        profilePicture: editData.personalInfo.profilePicture,
+        experience: editData.experience || [],
+        education: editData.education || [],
+        skills: editData.skills || [],
+        certifications: editData.certifications || [],
+        preferences: editData.preferences || {
+          jobTypes: [],
+          locations: [],
+          salaryRange: { min: "", max: "" },
+          remoteWork: false,
+        },
       };
 
-      setProfilePicture(pictureData);
-      saveProfile();
-      setUploadSuccess("Profile picture updated successfully!");
-      setTimeout(() => setUploadSuccess(""), 3000);
-    };
-    reader.readAsDataURL(file);
-  };
+      // Update profile in MongoDB
+      await jobService.updateUserData(updateData);
 
-  // Resume upload handlers
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    handleFileUpload(file);
-  };
+      // Update local state
+      setProfileData(editData);
+      setIsEditing(false);
+      setSuccess("Profile updated successfully!");
 
-  const handleFileUpload = (file) => {
-    setUploadError("");
-    setUploadSuccess("");
-
-    if (!file) return;
-
-    const allowedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError(
-        "Please upload a PDF or Word document (.pdf, .doc, .docx)"
-      );
-      return;
-    }
-
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setUploadError("File size must be less than 5MB");
-      return;
-    }
-
-    // Convert file to base64 for localStorage storage
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const resumeData = {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        uploadDate: new Date().toISOString(),
-        data: e.target.result, // base64 data
-      };
-
-      setUploadedResume(resumeData);
-      setUploadSuccess("Resume uploaded successfully!");
-      saveProfile();
-
-      setTimeout(() => setUploadSuccess(""), 3000);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileUpload(files[0]);
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Error saving profile:", err);
+      setError("Failed to save profile. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Experience handlers
   const addExperience = () => {
-    if (!newExperience.title || !newExperience.company) {
-      setUploadError("Please fill in required fields (Title and Company)");
-      return;
-    }
-
-    const experienceItem = {
-      ...newExperience,
+    const newExperience = {
       id: Date.now().toString(),
-    };
-
-    setExperience([...experience, experienceItem]);
-    setNewExperience({
-      title: "",
       company: "",
-      location: "",
+      position: "",
       startDate: "",
       endDate: "",
       current: false,
       description: "",
-    });
-    setEditingSection(null);
-    saveProfile();
+    };
+    setEditData(prev => ({
+      ...prev,
+      experience: [...(prev.experience || []), newExperience]
+    }));
   };
 
   const removeExperience = (id) => {
-    setExperience(experience.filter((exp) => exp.id !== id));
-    saveProfile();
+    setEditData(prev => ({
+      ...prev,
+      experience: prev.experience.filter(exp => exp.id !== id)
+    }));
   };
 
-  // Education handlers
+  const updateExperience = (id, field, value) => {
+    setEditData(prev => ({
+      ...prev,
+      experience: prev.experience.map(exp =>
+        exp.id === id ? { ...exp, [field]: value } : exp
+      )
+    }));
+  };
+
   const addEducation = () => {
-    if (!newEducation.degree || !newEducation.institution) {
-      setUploadError("Please fill in required fields (Degree and Institution)");
-      return;
-    }
-
-    const educationItem = {
-      ...newEducation,
+    const newEducation = {
       id: Date.now().toString(),
-    };
-
-    setEducation([...education, educationItem]);
-    setNewEducation({
-      degree: "",
       institution: "",
-      location: "",
+      degree: "",
+      field: "",
       startDate: "",
       endDate: "",
       current: false,
       gpa: "",
-      description: "",
-    });
-    setEditingSection(null);
-    saveProfile();
+    };
+    setEditData(prev => ({
+      ...prev,
+      education: [...(prev.education || []), newEducation]
+    }));
   };
 
   const removeEducation = (id) => {
-    setEducation(education.filter((edu) => edu.id !== id));
-    saveProfile();
+    setEditData(prev => ({
+      ...prev,
+      education: prev.education.filter(edu => edu.id !== id)
+    }));
   };
 
-  // Skills handlers
+  const updateEducation = (id, field, value) => {
+    setEditData(prev => ({
+      ...prev,
+      education: prev.education.map(edu =>
+        edu.id === id ? { ...edu, [field]: value } : edu
+      )
+    }));
+  };
+
   const addSkill = () => {
-    if (!newSkill.name) {
-      setUploadError("Please enter a skill name");
-      return;
+    const skillName = prompt("Enter skill name:");
+    if (skillName && skillName.trim()) {
+      const newSkill = {
+        id: Date.now().toString(),
+        name: skillName.trim(),
+        level: "Intermediate",
+      };
+      setEditData(prev => ({
+        ...prev,
+        skills: [...(prev.skills || []), newSkill]
+      }));
     }
-
-    const skillItem = {
-      ...newSkill,
-      id: Date.now().toString(),
-    };
-
-    setSkills([...skills, skillItem]);
-    setNewSkill({
-      name: "",
-    });
-    setEditingSection(null);
-    saveProfile();
   };
 
   const removeSkill = (id) => {
-    setSkills(skills.filter((skill) => skill.id !== id));
-    saveProfile();
+    setEditData(prev => ({
+      ...prev,
+      skills: prev.skills.filter(skill => skill.id !== id)
+    }));
   };
 
-  // Projects handlers
-  const addProject = () => {
-    if (!newProject.title || !newProject.description) {
-      setUploadError("Please fill in required fields (Title and Description)");
-      return;
-    }
-
-    const projectItem = {
-      ...newProject,
-      id: Date.now().toString(),
-      technologies: newProject.technologies
-        .split(",")
-        .map((tech) => tech.trim())
-        .filter(Boolean),
-      highlights: newProject.highlights
-        .split("\n")
-        .filter((highlight) => highlight.trim()),
-    };
-
-    setProjects([...projects, projectItem]);
-    setNewProject({
-      title: "",
-      description: "",
-      technologies: "",
-      startDate: "",
-      endDate: "",
-      current: false,
-      githubUrl: "",
-      liveUrl: "",
-      highlights: "",
-    });
-    setEditingSection(null);
-    saveProfile();
+  const updateSkill = (id, field, value) => {
+    setEditData(prev => ({
+      ...prev,
+      skills: prev.skills.map(skill =>
+        skill.id === id ? { ...skill, [field]: value } : skill
+      )
+    }));
   };
 
-  const removeProject = (id) => {
-    setProjects(projects.filter((project) => project.id !== id));
-    saveProfile();
-  };
-
-  // Utility functions
-  const handleViewResume = () => {
-    if (uploadedResume?.data) {
-      // Create a new window/tab with the resume data
-      const newWindow = window.open();
-      newWindow.document.write(`
-        <html>
-          <head>
-            <title>${uploadedResume.name}</title>
-          </head>
-          <body style="margin: 0; padding: 0;">
-            <iframe src="${uploadedResume.data}" width="100%" height="100vh" style="border: none;"></iframe>
-          </body>
-        </html>
-      `);
-    }
-  };
-
-  const handleDownloadResume = () => {
-    if (uploadedResume?.data) {
-      const link = document.createElement("a");
-      link.href = uploadedResume.data;
-      link.download = uploadedResume.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const handleDeleteResume = () => {
-    if (window.confirm("Are you sure you want to delete your resume?")) {
-      setUploadedResume(null);
-      saveProfile();
-    }
-  };
-
-  const triggerFileInput = () => {
-    document.getElementById("resume-upload").click();
-  };
-
-  const triggerProfilePictureInput = () => {
-    document.getElementById("profile-picture-upload").click();
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getInitials = (name) => {
-    return (
-      name
-        ?.split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase() || "U"
-    );
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-    });
-  };
-
-  // const getSkillLevelColor = (level) => {
-  //   switch (level) {
-  //     case "Expert":
-  //       return "bg-green-100 text-green-800";
-  //     case "Advanced":
-  //       return "bg-blue-100 text-blue-800";
-  //     case "Intermediate":
-  //       return "bg-yellow-100 text-yellow-800";
-  //     default:
-  //       return "bg-gray-100 text-gray-800";
-  //   }
-  // };
-
-  // Add function to filter skills based on input
-  const handleSkillInputChange = (e) => {
-    const input = e.target.value;
-    setNewSkill({ name: input });
-
-    if (input.length > 0) {
-      const filtered = predefinedSkills.filter((skill) =>
-        skill.toLowerCase().includes(input.toLowerCase())
-      );
-      setFilteredSkills(filtered);
-      setShowSkillDropdown(true);
-    } else {
-      setFilteredSkills([]);
-      setShowSkillDropdown(false);
-    }
-  };
-
-  // Add function to select a skill from dropdown
-  const handleSkillSelect = (skill) => {
-    setNewSkill({ name: skill });
-    setShowSkillDropdown(false);
-  };
-
-  if (!currentUser) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        {isLoading ? (
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading profile...</p>
-          </div>
-        ) : authError ? (
-          <div className="text-center">
-            <div className="w-32 h-32 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-16 h-16 text-red-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Authentication Error</h2>
-            <p className="text-red-600 mb-4">{authError}</p>
-            <Button onClick={() => navigate("/login")} className="bg-blue-600 hover:bg-blue-700">
-              Go to Login
-            </Button>
-          </div>
-        ) : (
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        )}
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-gray-900">Loading profile...</h2>
+        </div>
       </div>
     );
   }
 
+  const currentData = isEditing ? editData : profileData;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
-        <div className="relative bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-3xl shadow-2xl overflow-hidden mb-8">
-          <div className="absolute inset-0 bg-black/10"></div>
-          <div className="relative px-8 py-12">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-8">
+    <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
+            <p className="text-gray-600 mt-2">Manage your professional information</p>
+          </div>
+          <div className="flex gap-3">
+            {!isEditing ? (
+              <Button onClick={handleEdit} className="flex items-center gap-2">
+                <Edit3 className="w-4 h-4" />
+                Edit Profile
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  onClick={handleCancel}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status Messages */}
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-start">
+            <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md flex items-start">
+            <CheckCircle2 className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+            <span>{success}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Personal Info */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Personal Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {/* Profile Picture */}
-              <div className="relative group">
-                <div className="w-32 h-32 rounded-full bg-white/20 backdrop-blur-sm border-4 border-white/30 flex items-center justify-center overflow-hidden shadow-2xl">
-                  {profilePicture?.data ? (
+              <div className="text-center">
+                <div className="w-24 h-24 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  {currentData.personalInfo?.profilePicture ? (
                     <img
-                      src={profilePicture.data}
+                      src={currentData.personalInfo.profilePicture}
                       alt="Profile"
-                      className="w-full h-full object-cover"
+                      className="w-24 h-24 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="text-4xl font-bold text-white">
-                      {getInitials(personalInfo.fullName || currentUser.name)}
-                    </span>
+                    <User className="w-12 h-12 text-blue-600" />
                   )}
                 </div>
-                <button
-                  onClick={triggerProfilePictureInput}
-                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-full border-4 border-white flex items-center justify-center transition-colors"
-                >
-                  <Camera className="w-4 h-4 text-white" />
-                </button>
-              </div>
-
-              {/* User Info */}
-              <div className="flex-1 text-white">
-                <h1 className="text-3xl lg:text-4xl font-bold mb-2">
-                  {personalInfo.fullName || currentUser.name}
-                </h1>
-                <p className="text-xl text-blue-100 mb-4">
-                  {personalInfo.jobTitle || "Job Seeker"}
-                </p>
-                <div className="flex flex-wrap gap-6 text-blue-100">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    <span className="text-sm">
-                      {personalInfo.email || currentUser.email}
-                    </span>
-                  </div>
-                  {personalInfo.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4" />
-                      <span className="text-sm">{personalInfo.phone}</span>
-                    </div>
-                  )}
-                  {personalInfo.location && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span className="text-sm">{personalInfo.location}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Demo User Button - Remove in production */}
-              {!currentUser && (
-                <div className="lg:ml-auto flex gap-3">
-                  <Button
-                    onClick={createDemoUser}
-                    variant="outline"
-                    className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                  >
-                    Try Demo
+                {isEditing && (
+                  <Button variant="outline" size="sm">
+                    Change Photo
                   </Button>
-                  <Button
-                    onClick={checkAuthStatus}
-                    variant="outline"
-                    className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                  >
-                    Check Auth
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Hidden profile picture input */}
-        <input
-          id="profile-picture-upload"
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleProfilePictureUpload(e.target.files[0])}
-          className="hidden"
-        />
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-8 p-6">
-          <div className="flex flex-wrap border-b border-gray-200 gap-2">
-            <Button
-              onClick={() => setActiveTab("overview")}
-              variant="ghost"
-              className={`rounded-lg px-6 py-3 border-b-2 transition-all ${
-                activeTab === "overview"
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-blue-600 hover:bg-gray-50"
-              }`}
-            >
-              <User className="w-5 h-5 mr-3" />
-              Overview
-            </Button>
-            <Button
-              onClick={() => setActiveTab("experience")}
-              variant="ghost"
-              className={`rounded-lg px-6 py-3 border-b-2 transition-all ${
-                activeTab === "experience"
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-blue-600 hover:bg-gray-50"
-              }`}
-            >
-              <Briefcase className="w-5 h-5 mr-3" />
-              Experience
-            </Button>
-            <Button
-              onClick={() => setActiveTab("education")}
-              variant="ghost"
-              className={`rounded-lg px-6 py-3 border-b-2 transition-all ${
-                activeTab === "education"
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-blue-600 hover:bg-gray-50"
-              }`}
-            >
-              <GraduationCap className="w-5 h-5 mr-3" />
-              Education
-            </Button>
-            <Button
-              onClick={() => setActiveTab("skills")}
-              variant="ghost"
-              className={`rounded-lg px-6 py-3 border-b-2 transition-all ${
-                activeTab === "skills"
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-blue-600 hover:bg-gray-50"
-              }`}
-            >
-              <Code className="w-5 h-5 mr-3" />
-              Skills
-            </Button>
-            <Button
-              onClick={() => setActiveTab("projects")}
-              variant="ghost"
-              className={`rounded-lg px-6 py-3 border-b-2 transition-all ${
-                activeTab === "projects"
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-blue-600 hover:bg-gray-50"
-              }`}
-            >
-              <FolderOpen className="w-5 h-5 mr-3" />
-              Projects
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        {activeTab === "overview" && (
-          <div className="space-y-8">
-            {/* First Row: Personal Info, Social Links, About Me */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Personal Information */}
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900">
-                      Personal Information
-                    </h3>
-                  </div>
-                  {editingSection !== "personal" && (
-                    <Button
-                      onClick={() => handleEdit("personal")}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Edit3 className="w-4 h-4 mr-2" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-
-                {editingSection === "personal" ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Full Name
-                      </label>
-                      <Input
-                        value={personalInfo.fullName}
-                        onChange={(e) =>
-                          setPersonalInfo({
-                            ...personalInfo,
-                            fullName: e.target.value,
-                          })
-                        }
-                        placeholder="Enter your full name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Job Title
-                      </label>
-                      <Input
-                        value={personalInfo.jobTitle}
-                        onChange={(e) =>
-                          setPersonalInfo({
-                            ...personalInfo,
-                            jobTitle: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. Frontend Developer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <Input
-                        type="email"
-                        value={personalInfo.email}
-                        onChange={(e) =>
-                          setPersonalInfo({
-                            ...personalInfo,
-                            email: e.target.value,
-                          })
-                        }
-                        placeholder="your.email@example.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone Number
-                      </label>
-                      <Input
-                        value={personalInfo.phone}
-                        onChange={(e) =>
-                          setPersonalInfo({
-                            ...personalInfo,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder="+1 (555) 123-4567"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Location
-                      </label>
-                      <Input
-                        value={personalInfo.location}
-                        onChange={(e) =>
-                          setPersonalInfo({
-                            ...personalInfo,
-                            location: e.target.value,
-                          })
-                        }
-                        placeholder="City, Country"
-                      />
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <Button
-                        onClick={() => handleSave("personal")}
-                        className="flex-1"
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        Save
-                      </Button>
-                      <Button
-                        onClick={handleCancel}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Full Name
-                      </p>
-                      <p className="text-gray-900">
-                        {personalInfo.fullName || "Not provided"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Job Title
-                      </p>
-                      <p className="text-gray-900">
-                        {personalInfo.jobTitle || "Not provided"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Email</p>
-                      <p className="text-gray-900">
-                        {personalInfo.email || "Not provided"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Phone Number
-                      </p>
-                      <p className="text-gray-900">
-                        {personalInfo.phone || "Not provided"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Location
-                      </p>
-                      <p className="text-gray-900">
-                        {personalInfo.location || "Not provided"}
-                      </p>
-                    </div>
-                  </div>
                 )}
               </div>
 
-              {/* Social Links */}
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <ExternalLink className="w-5 h-5 text-green-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900">
-                      Social Links
-                    </h3>
-                  </div>
-                  {editingSection !== "social" && (
-                    <Button
-                      onClick={() => handleEdit("social")}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Edit3 className="w-4 h-4 mr-2" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-
-                {editingSection === "social" ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        LinkedIn
-                      </label>
-                      <Input
-                        value={socialLinks.linkedin}
-                        onChange={(e) =>
-                          setSocialLinks({
-                            ...socialLinks,
-                            linkedin: e.target.value,
-                          })
-                        }
-                        placeholder="https://linkedin.com/in/yourprofile"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        GitHub
-                      </label>
-                      <Input
-                        value={socialLinks.github}
-                        onChange={(e) =>
-                          setSocialLinks({
-                            ...socialLinks,
-                            github: e.target.value,
-                          })
-                        }
-                        placeholder="https://github.com/yourusername"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Portfolio
-                      </label>
-                      <Input
-                        value={socialLinks.portfolio}
-                        onChange={(e) =>
-                          setSocialLinks({
-                            ...socialLinks,
-                            portfolio: e.target.value,
-                          })
-                        }
-                        placeholder="https://yourportfolio.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Website
-                      </label>
-                      <Input
-                        value={socialLinks.website}
-                        onChange={(e) =>
-                          setSocialLinks({
-                            ...socialLinks,
-                            website: e.target.value,
-                          })
-                        }
-                        placeholder="https://yourwebsite.com"
-                      />
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <Button
-                        onClick={() => handleSave("social")}
-                        className="flex-1"
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        Save
-                      </Button>
-                      <Button
-                        onClick={handleCancel}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Linkedin className="w-5 h-5 text-blue-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          LinkedIn
-                        </span>
-                      </div>
-                      {socialLinks.linkedin ? (
-                        <a
-                          href={socialLinks.linkedin}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          View Profile
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-sm">Not added</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Github className="w-5 h-5 text-gray-800" />
-                        <span className="text-sm font-medium text-gray-700">
-                          GitHub
-                        </span>
-                      </div>
-                      {socialLinks.github ? (
-                        <a
-                          href={socialLinks.github}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          View Profile
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-sm">Not added</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Globe className="w-5 h-5 text-green-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Portfolio
-                        </span>
-                      </div>
-                      {socialLinks.portfolio ? (
-                        <a
-                          href={socialLinks.portfolio}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          Visit Site
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-sm">Not added</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Globe className="w-5 h-5 text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Website
-                        </span>
-                      </div>
-                      {socialLinks.website ? (
-                        <a
-                          href={socialLinks.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          Visit Site
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-sm">Not added</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* About Me */}
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900">
-                      About Me
-                    </h3>
-                  </div>
-                  {editingSection !== "about" && (
-                    <Button
-                      onClick={() => handleEdit("about")}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Edit3 className="w-4 h-4 mr-2" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-
-                {editingSection === "about" ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Professional Summary
-                      </label>
-                      <textarea
-                        value={aboutMe}
-                        onChange={(e) => setAboutMe(e.target.value)}
-                        placeholder="Write a compelling summary to showcase your expertise..."
-                        rows={6}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      />
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <Button
-                        onClick={() => handleSave("about")}
-                        className="flex-1"
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        Save
-                      </Button>
-                      <Button
-                        onClick={handleCancel}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {aboutMe ? (
-                      <p className="text-gray-700 leading-relaxed">{aboutMe}</p>
-                    ) : (
-                      <div className="text-center py-8">
-                        <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                        <p className="text-gray-500 mb-4">
-                          No professional summary added yet
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          Add a compelling summary to showcase your expertise
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Second Row: Resume (Full Width) */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900">Resume</h3>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    onClick={exportProfileData}
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Profile
-                  </Button>
-                  <Button
-                    onClick={clearProfileData}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear All
-                  </Button>
-                </div>
-              </div>
-
-              {uploadedResume ? (
-                <div className="border border-gray-200 rounded-xl p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">
-                          {uploadedResume.name}
-                        </h4>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span>{formatFileSize(uploadedResume.size)}</span>
-                          <span>•</span>
-                          <span>
-                            Uploaded{" "}
-                            {new Date(
-                              uploadedResume.uploadDate
-                            ).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        onClick={handleViewResume}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View
-                      </Button>
-                      <Button
-                        onClick={handleDownloadResume}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                      <Button
-                        onClick={triggerFileInput}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Replace
-                      </Button>
-                      <Button
-                        onClick={handleDeleteResume}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
-                    dragActive
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-300 hover:border-gray-400"
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">
-                    Upload your resume
-                  </h4>
-                  <p className="text-gray-600 mb-6">PDF, DOC, DOCX up to 5MB</p>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button
-                      onClick={triggerFileInput}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Upload className="w-5 h-5 mr-2" />
-                      Choose File
-                    </Button>
-                    <p className="text-sm text-gray-500 self-center">
-                      or drag and drop your file here
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Hidden file input */}
-              <input
-                id="resume-upload"
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-
-              {/* Error Message */}
-              {uploadError && (
-                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  <span className="text-red-700">{uploadError}</span>
-                </div>
-              )}
-
-              {/* Success Message */}
-              {uploadSuccess && (
-                <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <span className="text-green-700">{uploadSuccess}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Experience Tab */}
-        {activeTab === "experience" && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Work Experience
-                  </h3>
-                  <p className="text-gray-600">
-                    Add your professional experience
-                  </p>
-                </div>
-              </div>
-              {editingSection !== "add-experience" && (
-                <Button
-                  onClick={() => handleEdit("add-experience")}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Experience
-                </Button>
-              )}
-            </div>
-
-            {/* Add Experience Form */}
-            {editingSection === "add-experience" && (
-              <div className="mb-8 p-6 bg-gray-50 rounded-xl">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  Add New Experience
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Job Title *
-                    </label>
-                    <Input
-                      value={newExperience.title}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          title: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Senior Frontend Developer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Company *
-                    </label>
-                    <Input
-                      value={newExperience.company}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          company: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Google Inc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
-                    </label>
-                    <Input
-                      value={newExperience.location}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          location: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. San Francisco, CA"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newExperience.startDate}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newExperience.endDate}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          endDate: e.target.value,
-                        })
-                      }
-                      disabled={newExperience.current}
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="current-job"
-                      checked={newExperience.current}
-                      onChange={(e) =>
-                        setNewExperience({
-                          ...newExperience,
-                          current: e.target.checked,
-                          endDate: e.target.checked
-                            ? ""
-                            : newExperience.endDate,
-                        })
-                      }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="current-job"
-                      className="ml-2 text-sm text-gray-700"
-                    >
-                      I currently work here
-                    </label>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={newExperience.description}
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                {isEditing ? (
+                  <Input
+                    value={editData.personalInfo?.name || ""}
                     onChange={(e) =>
-                      setNewExperience({
-                        ...newExperience,
-                        description: e.target.value,
-                      })
+                      setEditData(prev => ({
+                        ...prev,
+                        personalInfo: {
+                          ...prev.personalInfo,
+                          name: e.target.value
+                        }
+                      }))
                     }
-                    placeholder="Describe your responsibilities and achievements..."
-                    rows={4}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    placeholder="Enter your full name"
                   />
+                ) : (
+                  <p className="text-gray-900">{currentData.personalInfo?.name || "Not provided"}</p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <p className="text-gray-900">{currentData.personalInfo?.email}</p>
                 </div>
-                <div className="flex gap-3 mt-6">
-                  <Button onClick={addExperience} className="flex-1">
-                    <Save className="w-4 h-4 mr-2" />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone
+                </label>
+                {isEditing ? (
+                  <Input
+                    value={editData.personalInfo?.phone || ""}
+                    onChange={(e) =>
+                      setEditData(prev => ({
+                        ...prev,
+                        personalInfo: {
+                          ...prev.personalInfo,
+                          phone: e.target.value
+                        }
+                      }))
+                    }
+                    placeholder="Enter your phone number"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <p className="text-gray-900">{currentData.personalInfo?.phone || "Not provided"}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                {isEditing ? (
+                  <Input
+                    value={editData.personalInfo?.location || ""}
+                    onChange={(e) =>
+                      setEditData(prev => ({
+                        ...prev,
+                        personalInfo: {
+                          ...prev.personalInfo,
+                          location: e.target.value
+                        }
+                      }))
+                    }
+                    placeholder="Enter your location"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <p className="text-gray-900">{currentData.personalInfo?.location || "Not provided"}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bio
+                </label>
+                {isEditing ? (
+                  <textarea
+                    value={editData.personalInfo?.bio || ""}
+                    onChange={(e) =>
+                      setEditData(prev => ({
+                        ...prev,
+                        personalInfo: {
+                          ...prev.personalInfo,
+                          bio: e.target.value
+                        }
+                      }))
+                    }
+                    placeholder="Tell us about yourself..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                  />
+                ) : (
+                  <p className="text-gray-900">{currentData.personalInfo?.bio || "No bio provided"}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Professional Info */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Experience Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="w-5 h-5" />
+                  Work Experience
+                </CardTitle>
+                {isEditing && (
+                  <Button onClick={addExperience} size="sm" className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
                     Add Experience
                   </Button>
-                  <Button
-                    onClick={() => {
-                      setEditingSection(null);
-                      setNewExperience({
-                        title: "",
-                        company: "",
-                        location: "",
-                        startDate: "",
-                        endDate: "",
-                        current: false,
-                        description: "",
-                      });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
+                )}
               </div>
-            )}
-
-            {/* Experience List */}
-            <div className="space-y-6">
-              {experience.length === 0 ? (
-                <div className="text-center py-12">
-                  <Briefcase className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">
-                    No experience added yet
-                  </h4>
-                  <p className="text-gray-600 mb-6">
-                    Add your work experience to showcase your professional
-                    journey
-                  </p>
-                  <Button
-                    onClick={() => handleEdit("add-experience")}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Your First Experience
-                  </Button>
-                </div>
-              ) : (
-                experience.map((exp) => (
-                  <div
-                    key={exp.id}
-                    className="border border-gray-200 rounded-xl p-6"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          {exp.title}
-                        </h4>
-                        <p className="text-blue-600 font-medium">
-                          {exp.company}
-                        </p>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                          {exp.location && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {exp.location}
+            </CardHeader>
+            <CardContent>
+              {currentData.experience && currentData.experience.length > 0 ? (
+                <div className="space-y-4">
+                  {currentData.experience.map((exp, index) => (
+                    <div key={exp.id || index} className="border rounded-lg p-4">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="grid grid-cols-2 gap-3 flex-1">
+                              <Input
+                                placeholder="Company"
+                                value={exp.company || ""}
+                                onChange={(e) => updateExperience(exp.id, "company", e.target.value)}
+                              />
+                              <Input
+                                placeholder="Position"
+                                value={exp.position || ""}
+                                onChange={(e) => updateExperience(exp.id, "position", e.target.value)}
+                              />
                             </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {formatDate(exp.startDate)} -{" "}
-                            {exp.current ? "Present" : formatDate(exp.endDate)}
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => removeExperience(exp.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {exp.description && (
-                      <p className="text-gray-700 leading-relaxed">
-                        {exp.description}
-                      </p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Education Tab */}
-        {activeTab === "education" && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                  <GraduationCap className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Education
-                  </h3>
-                  <p className="text-gray-600">
-                    Add your educational background
-                  </p>
-                </div>
-              </div>
-              {editingSection !== "add-education" && (
-                <Button
-                  onClick={() => handleEdit("add-education")}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Education
-                </Button>
-              )}
-            </div>
-
-            {/* Add Education Form */}
-            {editingSection === "add-education" && (
-              <div className="mb-8 p-6 bg-gray-50 rounded-xl">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  Add New Education
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Degree *
-                    </label>
-                    <Input
-                      value={newEducation.degree}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          degree: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Bachelor of Computer Science"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Institution *
-                    </label>
-                    <Input
-                      value={newEducation.institution}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          institution: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Stanford University"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
-                    </label>
-                    <Input
-                      value={newEducation.location}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          location: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Stanford, CA"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      GPA (Optional)
-                    </label>
-                    <Input
-                      value={newEducation.gpa}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          gpa: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. 3.8/4.0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newEducation.startDate}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newEducation.endDate}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          endDate: e.target.value,
-                        })
-                      }
-                      disabled={newEducation.current}
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="current-education"
-                      checked={newEducation.current}
-                      onChange={(e) =>
-                        setNewEducation({
-                          ...newEducation,
-                          current: e.target.checked,
-                          endDate: e.target.checked ? "" : newEducation.endDate,
-                        })
-                      }
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="current-education"
-                      className="ml-2 text-sm text-gray-700"
-                    >
-                      Currently studying here
-                    </label>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    value={newEducation.description}
-                    onChange={(e) =>
-                      setNewEducation({
-                        ...newEducation,
-                        description: e.target.value,
-                      })
-                    }
-                    placeholder="Relevant coursework, achievements, activities..."
-                    rows={3}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                  />
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    onClick={addEducation}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Add Education
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setEditingSection(null);
-                      setNewEducation({
-                        degree: "",
-                        institution: "",
-                        location: "",
-                        startDate: "",
-                        endDate: "",
-                        current: false,
-                        gpa: "",
-                        description: "",
-                      });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Education List */}
-            <div className="space-y-6">
-              {education.length === 0 ? (
-                <div className="text-center py-12">
-                  <GraduationCap className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">
-                    No education added yet
-                  </h4>
-                  <p className="text-gray-600 mb-6">
-                    Add your educational background and qualifications
-                  </p>
-                  <Button
-                    onClick={() => handleEdit("add-education")}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Your First Education
-                  </Button>
-                </div>
-              ) : (
-                education.map((edu) => (
-                  <div
-                    key={edu.id}
-                    className="border border-gray-200 rounded-xl p-6"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          {edu.degree}
-                        </h4>
-                        <p className="text-green-600 font-medium">
-                          {edu.institution}
-                        </p>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                          {edu.location && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {edu.location}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {formatDate(edu.startDate)} -{" "}
-                            {edu.current ? "Present" : formatDate(edu.endDate)}
-                          </div>
-                          {edu.gpa && (
-                            <div className="flex items-center gap-1">
-                              <Star className="w-4 h-4" />
-                              GPA: {edu.gpa}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => removeEducation(edu.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {edu.description && (
-                      <p className="text-gray-700 leading-relaxed">
-                        {edu.description}
-                      </p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Skills Tab */}
-        {activeTab === "skills" && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Code className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Skills & Expertise
-                  </h3>
-                  <p className="text-gray-600">
-                    Showcase your technical and soft skills
-                  </p>
-                </div>
-              </div>
-              {editingSection !== "add-skill" && (
-                <Button
-                  onClick={() => handleEdit("add-skill")}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Skill
-                </Button>
-              )}
-            </div>
-
-            {/* Add Skill Form */}
-            {editingSection === "add-skill" && (
-              <div className="mb-8 p-6 bg-gray-50 rounded-xl">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  Add New Skill
-                </h4>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Skill Name *
-                    </label>
-                    <div className="relative">
-                      <Input
-                        value={newSkill.name}
-                        onChange={handleSkillInputChange}
-                        placeholder="Search or type a skill..."
-                        className="w-full"
-                      />
-                      {showSkillDropdown && filteredSkills.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                          {filteredSkills.map((skill) => (
-                            <div
-                              key={skill}
-                              onClick={() => handleSkillSelect(skill)}
-                              className="px-4 py-2 hover:bg-purple-50 cursor-pointer text-sm"
+                            <Button
+                              onClick={() => removeExperience(exp.id)}
+                              variant="outline"
+                              size="sm"
+                              className="ml-2"
                             >
-                              {skill}
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              type="date"
+                              placeholder="Start Date"
+                              value={exp.startDate || ""}
+                              onChange={(e) => updateExperience(exp.id, "startDate", e.target.value)}
+                            />
+                            <Input
+                              type="date"
+                              placeholder="End Date"
+                              value={exp.endDate || ""}
+                              onChange={(e) => updateExperience(exp.id, "endDate", e.target.value)}
+                              disabled={exp.current}
+                            />
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={exp.current || false}
+                              onChange={(e) => updateExperience(exp.id, "current", e.target.checked)}
+                            />
+                            <span className="text-sm">Currently working here</span>
+                          </label>
+                          <textarea
+                            placeholder="Job description..."
+                            value={exp.description || ""}
+                            onChange={(e) => updateExperience(exp.id, "description", e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 min-h-[80px]"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{exp.position}</h4>
+                              <p className="text-blue-600 flex items-center gap-1">
+                                <Building className="w-4 h-4" />
+                                {exp.company}
+                              </p>
+                              <p className="text-gray-500 text-sm flex items-center gap-1 mt-1">
+                                <Calendar className="w-4 h-4" />
+                                {exp.startDate} - {exp.current ? "Present" : exp.endDate}
+                              </p>
                             </div>
-                          ))}
+                          </div>
+                          {exp.description && (
+                            <p className="text-gray-700 mt-2">{exp.description}</p>
+                          )}
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    onClick={addSkill}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Add Skill
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setEditingSection(null);
-                      setNewSkill({
-                        name: "",
-                      });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Skills List */}
-            <div className="space-y-6">
-              {skills.length === 0 ? (
-                <div className="text-center py-12">
-                  <Code className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">
-                    No skills added yet
-                  </h4>
-                  <p className="text-gray-600 mb-6">
-                    Add your technical and soft skills to showcase your
-                    expertise
-                  </p>
-                  <Button
-                    onClick={() => handleEdit("add-skill")}
-                    className="bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Your First Skill
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-5 gap-4">
-                  {skills.map((skill) => (
-                    <div
-                      key={skill.id}
-                      className="border border-blue-200 rounded-2xl p-3"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h1 className="text-lg font-semibold text-gray-900">
-                            {skill.name}
-                          </h1>
-                        </div>
-                        <Button
-                          onClick={() => removeSkill(skill.id)}
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      {/* <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getSkillLevelColor(
-                          skill.level
-                        )}`}
-                      >
-                        {skill.level}
-                      </span> */}
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No work experience added yet</p>
               )}
-            </div>
-          </div>
-        )}
+            </CardContent>
+          </Card>
 
-        {/* Projects Tab */}
-        {activeTab === "projects" && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <FolderOpen className="w-5 h-5 text-orange-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Projects</h3>
-                  <p className="text-gray-600">
-                    Showcase your work and achievements
-                  </p>
-                </div>
+          {/* Education Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5" />
+                  Education
+                </CardTitle>
+                {isEditing && (
+                  <Button onClick={addEducation} size="sm" className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Add Education
+                  </Button>
+                )}
               </div>
-              {editingSection !== "add-project" && (
-                <Button
-                  onClick={() => handleEdit("add-project")}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Project
-                </Button>
-              )}
-            </div>
-
-            {/* Add Project Form */}
-            {editingSection === "add-project" && (
-              <div className="mb-8 p-6 bg-gray-50 rounded-xl">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  Add New Project
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Project Title *
-                    </label>
-                    <Input
-                      value={newProject.title}
-                      onChange={(e) =>
-                        setNewProject({ ...newProject, title: e.target.value })
-                      }
-                      placeholder="e.g. E-commerce Web Application"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newProject.startDate}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date
-                    </label>
-                    <Input
-                      type="month"
-                      value={newProject.endDate}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          endDate: e.target.value,
-                        })
-                      }
-                      disabled={newProject.current}
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex items-center">
-                    <input
-                      type="checkbox"
-                      id="current-project"
-                      checked={newProject.current}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          current: e.target.checked,
-                          endDate: e.target.checked ? "" : newProject.endDate,
-                        })
-                      }
-                      className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="current-project"
-                      className="ml-2 text-sm text-gray-700"
-                    >
-                      This is an ongoing project
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      GitHub URL
-                    </label>
-                    <Input
-                      value={newProject.githubUrl}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          githubUrl: e.target.value,
-                        })
-                      }
-                      placeholder="https://github.com/username/project"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Live Demo URL
-                    </label>
-                    <Input
-                      value={newProject.liveUrl}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          liveUrl: e.target.value,
-                        })
-                      }
-                      placeholder="https://yourproject.com"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Technologies Used
-                    </label>
-                    <Input
-                      value={newProject.technologies}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          technologies: e.target.value,
-                        })
-                      }
-                      placeholder="React, Node.js, MongoDB, Express (comma-separated)"
-                    />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Project Description *
-                  </label>
-                  <textarea
-                    value={newProject.description}
-                    onChange={(e) =>
-                      setNewProject({
-                        ...newProject,
-                        description: e.target.value,
-                      })
-                    }
-                    placeholder="Describe what the project does, your role, and the impact..."
-                    rows={4}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                  />
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Key Highlights (Optional)
-                  </label>
-                  <textarea
-                    value={newProject.highlights}
-                    onChange={(e) =>
-                      setNewProject({
-                        ...newProject,
-                        highlights: e.target.value,
-                      })
-                    }
-                    placeholder="• Increased user engagement by 40%&#10;• Reduced load time by 60%&#10;• Implemented real-time features"
-                    rows={3}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                  />
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    onClick={addProject}
-                    className="flex-1 bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Add Project
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setEditingSection(null);
-                      setNewProject({
-                        title: "",
-                        description: "",
-                        technologies: "",
-                        startDate: "",
-                        endDate: "",
-                        current: false,
-                        githubUrl: "",
-                        liveUrl: "",
-                        highlights: "",
-                      });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Projects List */}
-            <div className="space-y-6">
-              {projects.length === 0 ? (
-                <div className="text-center py-12">
-                  <FolderOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">
-                    No projects added yet
-                  </h4>
-                  <p className="text-gray-600 mb-6">
-                    Showcase your work and demonstrate your skills through
-                    projects
-                  </p>
-                  <Button
-                    onClick={() => handleEdit("add-project")}
-                    className="bg-orange-600 hover:bg-orange-700 text-white"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Your First Project
-                  </Button>
+            </CardHeader>
+            <CardContent>
+              {currentData.education && currentData.education.length > 0 ? (
+                <div className="space-y-4">
+                  {currentData.education.map((edu, index) => (
+                    <div key={edu.id || index} className="border rounded-lg p-4">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="grid grid-cols-2 gap-3 flex-1">
+                              <Input
+                                placeholder="Institution"
+                                value={edu.institution || ""}
+                                onChange={(e) => updateEducation(edu.id, "institution", e.target.value)}
+                              />
+                              <Input
+                                placeholder="Degree"
+                                value={edu.degree || ""}
+                                onChange={(e) => updateEducation(edu.id, "degree", e.target.value)}
+                              />
+                            </div>
+                            <Button
+                              onClick={() => removeEducation(edu.id)}
+                              variant="outline"
+                              size="sm"
+                              className="ml-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <Input
+                            placeholder="Field of Study"
+                            value={edu.field || ""}
+                            onChange={(e) => updateEducation(edu.id, "field", e.target.value)}
+                          />
+                          <div className="grid grid-cols-3 gap-3">
+                            <Input
+                              type="date"
+                              placeholder="Start Date"
+                              value={edu.startDate || ""}
+                              onChange={(e) => updateEducation(edu.id, "startDate", e.target.value)}
+                            />
+                            <Input
+                              type="date"
+                              placeholder="End Date"
+                              value={edu.endDate || ""}
+                              onChange={(e) => updateEducation(edu.id, "endDate", e.target.value)}
+                              disabled={edu.current}
+                            />
+                            <Input
+                              placeholder="GPA (optional)"
+                              value={edu.gpa || ""}
+                              onChange={(e) => updateEducation(edu.id, "gpa", e.target.value)}
+                            />
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={edu.current || false}
+                              onChange={(e) => updateEducation(edu.id, "current", e.target.checked)}
+                            />
+                            <span className="text-sm">Currently studying here</span>
+                          </label>
+                        </div>
+                      ) : (
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{edu.degree}</h4>
+                          <p className="text-blue-600">{edu.institution}</p>
+                          <p className="text-gray-600">{edu.field}</p>
+                          <p className="text-gray-500 text-sm mt-1">
+                            {edu.startDate} - {edu.current ? "Present" : edu.endDate}
+                            {edu.gpa && ` • GPA: ${edu.gpa}`}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ) : (
-                projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="border border-gray-200 rounded-xl p-6"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          {project.title}
-                        </h4>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {formatDate(project.startDate)} -{" "}
-                            {project.current
-                              ? "Present"
-                              : formatDate(project.endDate)}
+                <p className="text-gray-500 text-center py-8">No education added yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Skills Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="w-5 h-5" />
+                  Skills
+                </CardTitle>
+                {isEditing && (
+                  <Button onClick={addSkill} size="sm" className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Add Skill
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {currentData.skills && currentData.skills.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentData.skills.map((skill, index) => (
+                    <div key={skill.id || index} className="border rounded-lg p-3">
+                      {isEditing ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <Input
+                              value={skill.name || ""}
+                              onChange={(e) => updateSkill(skill.id, "name", e.target.value)}
+                              placeholder="Skill name"
+                              className="mb-2"
+                            />
+                            <select
+                              value={skill.level || "Intermediate"}
+                              onChange={(e) => updateSkill(skill.id, "level", e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            >
+                              <option value="Beginner">Beginner</option>
+                              <option value="Intermediate">Intermediate</option>
+                              <option value="Advanced">Advanced</option>
+                              <option value="Expert">Expert</option>
+                            </select>
                           </div>
+                          <Button
+                            onClick={() => removeSkill(skill.id)}
+                            variant="outline"
+                            size="sm"
+                            className="ml-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
-                        <div className="flex gap-3 mt-2">
-                          {project.githubUrl && (
-                            <a
-                              href={project.githubUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-                            >
-                              <Github className="w-4 h-4" />
-                              GitHub
-                            </a>
-                          )}
-                          {project.liveUrl && (
-                            <a
-                              href={project.liveUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                              Live Demo
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => removeProject(project.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <p className="text-gray-700 leading-relaxed mb-4">
-                      {project.description}
-                    </p>
-
-                    {project.technologies &&
-                      project.technologies.length > 0 && (
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-gray-700 mb-2">
-                            Technologies:
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {project.technologies.map((tech, index) => (
-                              <span
-                                key={index}
-                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
-                              >
-                                {tech}
-                              </span>
-                            ))}
+                      ) : (
+                        <div>
+                          <h4 className="font-medium text-gray-900">{skill.name}</h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`w-4 h-4 ${
+                                    star <= (skill.level === "Expert" ? 5 : skill.level === "Advanced" ? 4 : skill.level === "Intermediate" ? 3 : 2)
+                                      ? "text-yellow-400 fill-current"
+                                      : "text-gray-300"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-sm text-gray-600">{skill.level}</span>
                           </div>
                         </div>
                       )}
-
-                    {project.highlights && project.highlights.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-700 mb-2">
-                          Key Highlights:
-                        </p>
-                        <ul className="list-disc list-inside text-gray-700 space-y-1">
-                          {project.highlights.map((highlight, index) => (
-                            <li key={index} className="text-sm">
-                              {highlight}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ))
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No skills added yet</p>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Error/Success Messages */}
-        {uploadError && (
-          <div className="fixed bottom-4 right-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 shadow-lg z-50">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <span className="text-red-700">{uploadError}</span>
-            <Button
-              onClick={() => setUploadError("")}
-              variant="ghost"
-              size="sm"
-              className="p-1"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
-
-        {uploadSuccess && (
-          <div className="fixed bottom-4 right-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 shadow-lg z-50">
-            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <span className="text-green-700">{uploadSuccess}</span>
-            <Button
-              onClick={() => setUploadSuccess("")}
-              variant="ghost"
-              size="sm"
-              className="p-1"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

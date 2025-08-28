@@ -18,6 +18,8 @@ app.disable("x-powered-by");
 //Route imports
 const auth = require('./src/route/Auth.route');
 const log = require('./src/route/JobPortalOperation.route');
+const userProfile = require('./src/route/UserProfile.route');
+const application = require('./src/route/Application.route');
 
 //CORS
 const corsOptions = {
@@ -52,6 +54,8 @@ initializeMongoDB();
 //Routes
 app.use('/auth/api', auth);
 app.use('/auth/api', log);
+app.use('/auth/api', userProfile);
+app.use('/auth/api', application);
 
 //Health check
 app.get('/', (req, res) => {

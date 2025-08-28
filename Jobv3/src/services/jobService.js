@@ -77,7 +77,7 @@ class JobService {
   }
   async getUsersData(jobData) {
     try {
-      const response = await this.makeRequest('/userprofile', 'GET', jobData);
+      const response = await this.makeRequest('/userprofile', 'POST', jobData);
       return response;
     } catch (error) {
       console.log(error.message);
@@ -85,7 +85,7 @@ class JobService {
   }
   async updateUserData(userData) {
     try {
-      const response = await this.makeRequest('/userprofile', 'GET', userData);
+      const response = await this.makeRequest('/updateUserProfile', 'POST', userData);
       return response;
     } catch (error) {
       console.log(error.message);
@@ -110,6 +110,68 @@ class JobService {
     try {
       // Try to delete from MongoDB
       await this.makeRequest('/deleteJob', 'POST', { jobId });
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  // Application management methods
+  async submitApplication(applicationData) {
+    try {
+      const response = await this.makeRequest('/submitApplication', 'POST', applicationData);
+      return response;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async getCandidateApplications(userId) {
+    try {
+      const response = await this.makeRequest('/getCandidateApplications', 'POST', { userId });
+      return response;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async getJobApplications(jobId) {
+    try {
+      const response = await this.makeRequest('/getJobApplications', 'POST', { jobId });
+      return response;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async updateApplicationStatus(applicationId, status, notes) {
+    try {
+      const response = await this.makeRequest('/updateApplicationStatus', 'POST', { 
+        applicationId, 
+        status, 
+        notes 
+      });
+      return response;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async getRecruiterApplications(recruiterId) {
+    try {
+      const response = await this.makeRequest('/getRecruiterApplications', 'POST', { recruiterId });
+      return response;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async getApplicationStats(userId, recruiterId) {
+    try {
+      const response = await this.makeRequest('/getApplicationStats', 'POST', { 
+        userId, 
+        recruiterId 
+      });
+      return response;
     } catch (error) {
       console.log(error.message);
     }
