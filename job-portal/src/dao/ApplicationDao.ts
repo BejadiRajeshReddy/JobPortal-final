@@ -1,4 +1,5 @@
 export const sql = require('mssql');
+const bcrypt = require('bcryptjs')
 const uuid = require('uuid');
 const { mongoDb } = require('./core/MongoDb');
 
