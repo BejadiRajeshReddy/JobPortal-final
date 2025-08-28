@@ -3,10 +3,7 @@ const uuid = require('uuid');
 const { mongoDb } = require('./core/MongoDb');
 const jobIds = recruiterJobs.map((job: any) => job._id);
 
-pendingApplications: applications.filter((app: any) => app.status === 'pending').length,
-acceptedApplications: applications.filter((app: any) => app.status === 'accepted').length,
-rejectedApplications: applications.filter((app: any) => app.status === 'rejected').length,
-interviewApplications: applications.filter((app: any) => app.status === 'interview').length
+
 
 class ApplicationDao {
     constructor() {
