@@ -1,9 +1,39 @@
 export const sql = require('mssql');
 const uuid = require('uuid');
 const { mongoDb } = require('./core/MongoDb');
-const jobIds = recruiterJobs.map((job: any) => job._id);
 
+// Define interfaces for better type safety
+interface Job {
+    _id: string;
+    recruiterId: string;
+    applicants?: Applicant[];
+    [key: string]: any;
+}
 
+interface Application {
+    _id: string;
+    userId: string;
+    jobId: string;
+    candidateName: string;
+    candidateEmail: string;
+    coverLetter?: string;
+    resume?: string;
+    status: string;
+    created_dtz: Date;
+    modified_dtz?: Date;
+    notes?: string;
+    [key: string]: any;
+}
+
+interface Applicant {
+    userId: string;
+    name: string;
+    email: string;
+    coverLetter?: string;
+    resume?: string;
+    appliedAt: string;
+    status: string;
+}
 
 class ApplicationDao {
     constructor() {
@@ -26,7 +56,7 @@ class ApplicationDao {
             
             // Also update the job with the new applicant
             if (applicationObj.jobId) {
-                const job = await mongoDb.findOne('job', { _id: applicationObj.jobId });
+                const job: Job = await mongoDb.findOne('job', { _id: applicationObj.jobId });
                 if (job) {
                     const applicants = job.applicants || [];
                     applicants.push({
@@ -132,8 +162,8 @@ class ApplicationDao {
             console.log('🔍 Getting applications for recruiter:', recruiterId);
             
             // First get all jobs by this recruiter
-            const recruiterJobs = await mongoDb.findMany('job', { recruiterId });
-            const jobIds = recruiterJobs.map(job => job._id);
+            const recruiterJobs: Job[] = await mongoDb.findMany('job', { recruiterId });
+            const jobIds = recruiterJobs.map((job: Job) => job._id);
             
             // Then get all applications for these jobs
             const applications = await mongoDb.findMany('applications', { 
@@ -185,30 +215,30 @@ class ApplicationDao {
             
             if (recruiterId) {
                 // Get stats for recruiter
-                const recruiterJobs = await mongoDb.findMany('job', { recruiterId });
-                const jobIds = recruiterJobs.map(job => job._id);
-                const applications = await mongoDb.findMany('applications', { 
+                const recruiterJobs: Job[] = await mongoDb.findMany('job', { recruiterId });
+                const jobIds = recruiterJobs.map((job: Job) => job._id);
+                const applications: Application[] = await mongoDb.findMany('applications', { 
                     jobId: { $in: jobIds } 
                 });
                 
                 stats = {
                     totalApplications: applications.length,
-                    pendingApplications: applications.filter(app => app.status === 'pending').length,
-                    acceptedApplications: applications.filter(app => app.status === 'accepted').length,
-                    rejectedApplications: applications.filter(app => app.status === 'rejected').length,
+                    pendingApplications: applications.filter((app: Application) => app.status === 'pending').length,
+                    acceptedApplications: applications.filter((app: Application) => app.status === 'accepted').length,
+                    rejectedApplications: applications.filter((app: Application) => app.status === 'rejected').length,
                     totalJobs: recruiterJobs.length,
                     avgApplicationsPerJob: recruiterJobs.length > 0 ? Math.round(applications.length / recruiterJobs.length) : 0
                 };
             } else if (userId) {
                 // Get stats for candidate
-                const applications = await mongoDb.findMany('applications', { userId });
+                const applications: Application[] = await mongoDb.findMany('applications', { userId });
                 
                 stats = {
                     totalApplications: applications.length,
-                    pendingApplications: applications.filter(app => app.status === 'pending').length,
-                    acceptedApplications: applications.filter(app => app.status === 'accepted').length,
-                    rejectedApplications: applications.filter(app => app.status === 'rejected').length,
-                    interviewApplications: applications.filter(app => app.status === 'interview').length
+                    pendingApplications: applications.filter((app: Application) => app.status === 'pending').length,
+                    acceptedApplications: applications.filter((app: Application) => app.status === 'accepted').length,
+                    rejectedApplications: applications.filter((app: Application) => app.status === 'rejected').length,
+                    interviewApplications: applications.filter((app: Application) => app.status === 'interview').length
                 };
             }
             
