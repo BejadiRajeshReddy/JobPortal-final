@@ -7,6 +7,9 @@ pendingApplications: applications.filter((app: any) => app.status === 'pending')
 acceptedApplications: applications.filter((app: any) => app.status === 'accepted').length,
 rejectedApplications: applications.filter((app: any) => app.status === 'rejected').length,
 interviewApplications: applications.filter((app: any) => app.status === 'interview').length
+acceptedApplications: applications.filter((app: any) => app.status === 'accepted').length,
+rejectedApplications: applications.filter((app: any) => app.status === 'rejected').length,
+interviewApplications: applications.filter((app: any) => app.status === 'interview').length
 
 class ApplicationDao {
     constructor() {
